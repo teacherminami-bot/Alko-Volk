@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Алко-Волк: Электроника</title>
+<style>
+  * { box-sizing: border-box; touch-action: manipulation; user-select: none; }
+  body {
+    margin: 0; padding: 0;
+    background: #2b2b2b;
+    color: #333;
+    font-family: 'Courier New', Courier, monospace;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100vh; overflow: hidden;
+  }
+  .console {
+    background: #d4cfb4;
+    border: 8px solid #8c8670;
+    border-radius: 24px;
+    padding: 15px;
+    width: 95vw; max-width: 420px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 0 10px rgba(0,0,0,0.2);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .header {
+    font-weight: bold; font-size: 18px; color: #4a4637;
+    margin-bottom: 8px; letter-spacing: 2px;
+  }
+  .screen-frame {
+    background: #9ead86;
+    border: 6px inset #727d60;
+    border-radius: 10px;
+    width: 100%; height: 280px;
+    position: relative; overflow: hidden;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.25);
+  }
+  .hud {
+    display: flex; justify-content: space-between;
+    padding: 8px 12px; font-size: 18px; font-weight: bold;
+    color: #1e2418; border-bottom: 2px dashed rgba(30,36,24,0.3);
+  }
+  .chute {
+    position: absolute; width: 90px; height: 6px;
+    background: #1e2418;
+  }
+  .chute.tl { top: 80px; left: 0; transform: rotate(20deg); transform-origin: left; }
+  .chute.bl { top: 165px; left: 0; transform: rotate(20deg); transform-origin: left; }
+  .chute.tr { top: 80px; right: 0; transform: rotate(-20deg); transform-origin: right; }
+  .chute.br { top: 165px; right: 0; transform: rotate(-20deg); transform-origin: right; }
+
+  #wolf {
+    position: absolute; bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 52px; text-align: center;
+    line-height: 1;
+  }
+  #basket {
+    position: absolute; font-size: 34px;
+    transition: all 0.08s ease;
+  }
+  .item {
+    position: absolute; font-size: 26px;
+    transform: translate(-50%, -50%);
+  }
+  .controls {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 15px; width: 100%; margin-top: 18px;
+  }
+  .btn {
+    background: #c0392b; color: white;
+    border: 4px solid #7f1d1d; border-radius: 50px;
+    padding: 16px; font-size: 16px; font-weight: bold;
+    text-align: center; cursor: pointer;
+    box-shadow: 0 5px 0 #5f1414;
+  }
+  .btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 #5f1414;
+  }
+  #overlay {
+    position: absolute; inset: 0;
+    background: rgba(158, 173, 134, 0.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 10; text-align: center; padding: 20px;
+  }
+  #overlay h2 { margin: 0 0 10px; color: #1e2418; font-size: 26px; }
+  #start-btn {
+    background: #1e2418; color: #9ead86;
+    border: none; padding: 12px 28px;
+    font-size: 18px; font-weight: bold;
+    border-radius: 8px; cursor: pointer; margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="console">
+  <div class="header">ЭЛЕКТРОНИКА: АЛКО-ВОЛК</div>
+  <div class="screen-frame" id="screen">
+    <div class="hud">
+      <div>СЧЁТ: <span id="score">000</span></div>
+      <div>ШТРАФ: <span id="misses">0</span>/3</div>
+    </div>
+
+    <div class="chute tl"></div>
+    <div class="chute bl"></div>
+    <div class="chute tr"></div>
+    <div class="chute br"></div>
+
+    <div id="wolf">🐺</div>
+    <div id="basket">🧺</div>
+    <div id="items-layer"></div>
+
+    <div id="overlay">
+      <h2 id="title-text">АЛКО-ВОЛК</h2>
+      <p id="desc-text">Лови бутылки 🍾🍺 в корзину!<br>Не дай им разбиться!</p>
+      <button id="start-btn" onclick="startGame()">ИГРАТЬ</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="btn" onpointerdown="setPos(0)">↖ ВЕРХ-ЛЕВО</div>
+    <div class="btn" onpointerdown="setPos(2)">ВЕРХ-ПРАВО ↗</div>
+    <div class="btn" onpointerdown="setPos(1)">↙ НИЗ-ЛЕВО</div>
+    <div class="btn" onpointerdown="setPos(3)">НИЗ-ПРАВО ↘</div>
+  </div>
+</div>
+
+<script>
+  let wolfPos = 0;
+  let score = 0;
+  let misses = 0;
+  let items = [];
+  let gameRunning = false;
+  let loopTimer = null;
+
+  const basketCoords = [
+    { left: '68px', top: '95px' },
+    { left: '68px', top: '180px' },
+    { left: 'calc(100% - 102px)', top: '95px' },
+    { left: 'calc(100% - 102px)', top: '180px' }
+  ];
+
+  const icons = ['🍺', '🍾', '🍷', '🥃'];
+
+  function setPos(pos) {
+    wolfPos = pos;
+    const b = document.getElementById('basket');
+    b.style.left = basketCoords[pos].left;
+    b.style.top = basketCoords[pos].top;
+    const w = document.getElementById('wolf');
+    w.style.transform = (pos < 2) ? 'translateX(-50%) scaleX(-1)' : 'translateX(-50%) scaleX(1)';
+  }
+
+  function startGame() {
+    score = 0; misses = 0; items = [];
+    gameRunning = true;
+    document.getElementById('overlay').style.display = 'none';
+    updateHud();
+    setPos(0);
+    clearInterval(loopTimer);
+    loopTimer = setInterval(gameTick, 550);
+  }
+
+  function spawnItem() {
+    const chute = Math.floor(Math.random() * 4);
+    const icon = icons[Math.floor(Math.random() * icons.length)];
+    items.push({ chute, step: 0, icon });
+  }
+
+  function gameTick() {
+    if (!gameRunning) return;
+
+    if (Math.random() < 0.65 || items.length === 0) {
+      spawnItem();
+    }
+
+    for (let i = items.length - 1; i >= 0; i--) {
+      items[i].step++;
+      if (items[i].step >= 4) {
+        if (items[i].chute === wolfPos) {
+          score++;
+        } else {
+          misses++;
+        }
+        items.splice(i, 1);
+      }
+    }
+
+    updateHud();
+    renderItems();
+
+    if (misses >= 3) {
+      endGame();
+    }
+  }
+
+  function renderItems() {
+    const layer = document.getElementById('items-layer');
+    layer.innerHTML = '';
+    items.forEach(it => {
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerText = it.icon;
+
+      const isLeft = it.chute < 2;
+      const isTop = (it.chute === 0 || it.chute === 2);
+      const baseTop = isTop ? 65 : 150;
+      const yOffset = it.step * 11;
+      const xOffset = 15 + it.step * 22;
+
+      el.style.top = (baseTop + yOffset) + 'px';
+      if (isLeft) {
+        el.style.left = xOffset + 'px';
+      } else {
+        el.style.left = `calc(100% - ${xOffset}px)`;
+      }
+      layer.appendChild(el);
+    });
+  }
+
+  function updateHud() {
+    document.getElementById('score').innerText = String(score).padStart(3, '0');
+    document.getElementById('misses').innerText = misses;
+  }
+
+  function endGame() {
+    gameRunning = false;
+    clearInterval(loopTimer);
+    document.getElementById('title-text').innerText = 'ИГРА ОКОНЧЕНА!';
+    document.getElementById('desc-text').innerHTML = `Твой улов: <b>${score}</b> шт.<br>Слишком много разбитой тары! 💥`;
+    document.getElementById('start-btn').innerText = 'ЕЩЁ РАЗ';
+    document.getElementById('overlay').style.display = 'flex';
+  }
+
+  setPos(0);
+</script>
+</body>
+</html>
