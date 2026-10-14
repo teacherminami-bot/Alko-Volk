@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Алко-Волк: 3D Блокбастер</title>
+<title>Алко-Волк: 3D Свободный Город</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; touch-action: none; }
-  body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  body, html { width: 100%; height: 100%; overflow: hidden; background: #050505; font-family: 'Segoe UI', Tahoma, sans-serif; }
   canvas { display: block; width: 100vw; height: 100vh; }
   #hud {
     position: absolute; top: 20px; left: 20px; color: #fff;
@@ -14,20 +14,28 @@
     pointer-events: none; z-index: 10;
   }
   .controls {
-    position: absolute; bottom: 25px; width: 100%; display: flex;
-    justify-content: space-between; padding: 0 25px; pointer-events: none; z-index: 10;
+    position: absolute; bottom: 20px; width: 100%; display: flex;
+    justify-content: space-between; padding: 0 20px; pointer-events: none; z-index: 10;
   }
-  .btn-group { display: flex; gap: 18px; pointer-events: auto; }
+  .d-pad {
+    display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px);
+    gap: 6px; pointer-events: auto;
+  }
+  .action-pad {
+    display: flex; gap: 15px; pointer-events: auto; align-items: flex-end; padding-bottom: 5px;
+  }
   .c-btn {
-    width: 80px; height: 80px; background: rgba(30,30,30,0.65);
-    border: 3px solid rgba(255,255,255,0.8); border-radius: 50%;
-    color: white; font-size: 26px; font-weight: bold;
+    background: rgba(30,30,30,0.65); border: 3px solid rgba(255,255,255,0.8); border-radius: 50%;
+    color: white; font-size: 22px; font-weight: bold;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 6px 15px rgba(0,0,0,0.7);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.6);
   }
-  .c-btn:active { background: rgba(255,255,255,0.4); transform: scale(0.92); }
-  .action-fart { background: rgba(100,200,20,0.75); border-color: #7cb518; }
-  .action-jump { background: rgba(220,50,50,0.75); border-color: #ff5722; }
+  .c-btn:active { background: rgba(255,255,255,0.5); transform: scale(0.92); }
+  .action-btn {
+    width: 75px; height: 75px; border-radius: 50%; font-size: 20px;
+  }
+  .btn-fart { background: rgba(100,200,20,0.8); border-color: #7cb518; }
+  .btn-jump { background: rgba(220,50,50,0.8); border-color: #ff5722; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -36,146 +44,129 @@
 <div id="hud">ОЧКИ: <span id="scoreVal">0</span> | ЖИЗНИ: ❤️x<span id="lifeVal">3</span></div>
 
 <div class="controls">
-  <div class="btn-group">
+  <!-- D-Pad для свободного движения во все 4 стороны -->
+  <div class="d-pad">
+    <div></div>
+    <div class="c-btn" id="upBtn">▲</div>
+    <div></div>
     <div class="c-btn" id="leftBtn">◀</div>
+    <div></div>
     <div class="c-btn" id="rightBtn">▶</div>
+    <div></div>
+    <div class="c-btn" id="downBtn">▼</div>
+    <div></div>
   </div>
-  <div class="btn-group">
-    <div class="c-btn action-fart" id="fartBtn">ПУК</div>
-    <div class="c-btn action-jump" id="jumpBtn">ПРЫГ</div>
+
+  <!-- Кнопки ПУК и ПРЫЖОК -->
+  <div class="action-pad">
+    <div class="c-btn action-btn btn-fart" id="fartBtn">ПУК!</div>
+    <div class="c-btn action-btn btn-jump" id="jumpBtn">ПРЫГ</div>
   </div>
 </div>
 
 <script>
 let scene, camera, renderer;
-let wolf, snacks = [], grannies = [], particles = [], buildings = [];
+let wolf, snacks = [], grannies = [], particles = [];
 let score = 0, lives = 3;
-let moveLeft = false, moveRight = false, isJumping = false;
+let moveUp = false, moveDown = false, moveLeft = false, moveRight = false, isJumping = false;
 let wolfVy = 0;
-const gravity = 0.016;
+const gravity = 0.015;
 
 function init3D() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a2e);
-  scene.fog = new THREE.FogExp2(0x1a1a2e, 0.012);
+  scene.background = new THREE.Color(0x1e272e);
+  scene.fog = new THREE.FogExp2(0x1e272e, 0.012);
 
-  camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 4, 10);
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 6, 12);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
 
-  // Освещение в стиле вечернего мегаполиса
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  // Освещение
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
-  dirLight.position.set(15, 30, 15);
+  const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.1);
+  dirLight.position.set(20, 35, 20);
   dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 1024;
-  dirLight.shadow.mapSize.height = 1024;
   scene.add(dirLight);
 
-  createCityEnvironment();
-  createDetailedWolf();
+  createStreetEnvironment();
+  createCharacterWolf();
   createGameEntities();
   initControls();
   window.addEventListener('resize', onWindowResize);
 }
 
-function createCityEnvironment() {
-  // Дорога (асфальт)
-  const roadGeo = new THREE.PlaneGeometry(200, 12);
-  const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+function createStreetEnvironment() {
+  // Широкая дорога и тротуары для свободы перемещения
+  const roadGeo = new THREE.PlaneGeometry(300, 16);
+  const roadMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.8 });
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
-  road.position.set(0, 0, 0);
   road.receiveShadow = true;
   scene.add(road);
 
-  // Разметка на дороге
-  for (let i = -90; i < 100; i += 6) {
-    const lineGeo = new THREE.BoxGeometry(2, 0.02, 0.4);
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffeb3b });
-    const line = new THREE.Mesh(lineGeo, lineMat);
-    line.position.set(i, 0.01, 0);
-    scene.add(line);
-  }
+  // Обочины / тротуары
+  const sideMat = new THREE.MeshStandardMaterial({ color: 0x95a5a6 });
+  const sw1 = new THREE.Mesh(new THREE.PlaneGeometry(300, 4), sideMat);
+  sw1.rotation.x = -Math.PI / 2;
+  sw1.position.set(0, 0.01, -10);
+  scene.add(sw1);
 
-  // Тротуары и здания на заднем плане
-  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x7f8c8d });
-  const swLeft = new THREE.Mesh(new THREE.PlaneGeometry(200, 3), sidewalkMat);
-  swLeft.rotation.x = -Math.PI / 2;
-  swLeft.position.set(0, 0.02, -7.5);
-  swLeft.receiveShadow = true;
-  scene.add(swLeft);
-
-  const swRight = new THREE.Mesh(new THREE.PlaneGeometry(200, 3), sidewalkMat);
-  swRight.rotation.x = -Math.PI / 2;
-  swRight.position.set(0, 0.02, 7.5);
-  swRight.receiveShadow = true;
-  scene.add(swRight);
-
-  // Процедурные многоэтажки по бокам
-  const bMat = new THREE.MeshStandardMaterial({ color: 0x3b4252, roughness: 0.9 });
-  for (let i = -80; i <= 90; i += 14) {
-    const h = 12 + Math.random() * 15;
-    const bGeo = new THREE.BoxGeometry(10, h, 8);
-    const b = new THREE.Mesh(bGeo, bMat);
-    b.position.set(i, h / 2, -13);
-    b.castShadow = true;
-    b.receiveShadow = true;
-    scene.add(b);
-    buildings.push(b);
-  }
+  const sw2 = new THREE.Mesh(new THREE.PlaneGeometry(300, 4), sideMat);
+  sw2.rotation.x = -Math.PI / 2;
+  sw2.position.set(0, 0.01, 10);
+  scene.add(sw2);
 }
 
-function createDetailedWolf() {
+function createCharacterWolf() {
   const group = new THREE.Group();
+  const matFur = new THREE.MeshStandardMaterial({ color: 0x7f8c8d, roughness: 0.6 });
+  const matShorts = new THREE.MeshStandardMaterial({ color: 0xff5722, roughness: 0.4 });
 
   // Торс
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(1.1, 1.7, 0.7),
-    new THREE.MeshStandardMaterial({ color: 0x7d8597, roughness: 0.5 })
-  );
-  body.position.y = 1.3;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 1.2, 16), matFur);
+  body.position.y = 1.1;
   body.castShadow = true;
   group.add(body);
 
-  // Яркие шорты
-  const shorts = new THREE.Mesh(
-    new THREE.BoxGeometry(1.15, 0.8, 0.75),
-    new THREE.MeshStandardMaterial({ color: 0xff5722, roughness: 0.4 })
-  );
+  // Шорты
+  const shorts = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.6, 16), matShorts);
   shorts.position.y = 0.55;
   shorts.castShadow = true;
   group.add(shorts);
 
-  // Голова
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.9, 0.9, 0.9),
-    new THREE.MeshStandardMaterial({ color: 0x6c757d })
-  );
-  head.position.set(0, 2.5, 0.1);
+  // Голова (более сглаженная и пропорциональная, не куб)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), matFur);
+  head.position.set(0, 1.9, 0.1);
   head.castShadow = true;
   group.add(head);
 
+  // Вытянутая волчья морда
+  const snout = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.6, 16), matFur);
+  snout.rotation.x = Math.PI / 2;
+  snout.position.set(0, 1.8, 0.45);
+  group.add(snout);
+
+  // Черный нос
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+  nose.position.set(0, 1.8, 0.75);
+  group.add(nose);
+
   // Массивные диджейские наушники
-  const band = new THREE.Mesh(
-    new THREE.TorusGeometry(0.55, 0.08, 8, 24, Math.PI),
-    new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8 })
-  );
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.06, 8, 24, Math.PI), new THREE.MeshStandardMaterial({ color: 0x111, metalness: 0.9 }));
   band.rotation.x = Math.PI / 2;
-  band.position.set(0, 2.7, 0.1);
+  band.position.set(0, 2.05, 0.1);
   group.add(band);
 
-  const earmuffMat = new THREE.MeshStandardMaterial({ color: 0x00f5d4, emissive: 0x004433 });
-  const leftEar = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.2, 16), earmuffMat);
+  const earMat = new THREE.MeshStandardMaterial({ color: 0x00f5d4, emissive: 0x003322 });
+  const leftEar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.15, 16), earMat);
   leftEar.rotation.z = Math.PI / 2;
-  leftEar.position.set(-0.5, 2.5, 0.1);
+  leftEar.position.set(-0.5, 1.9, 0.1);
   group.add(leftEar);
 
   const rightEar = leftEar.clone();
@@ -183,50 +174,45 @@ function createDetailedWolf() {
   group.add(rightEar);
 
   wolf = group;
-  wolf.position.set(-8, 0, 0);
+  wolf.position.set(-10, 0, 0);
   scene.add(wolf);
 }
 
 function createGameEntities() {
-  // Сине-белые пивные банки
-  for (let i = -3; i <= 6; i += 3) {
-    const canGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 16);
-    const canMat = new THREE.MeshStandardMaterial({ color: 0x0055d4, metalness: 0.6 });
-    const can = new THREE.Mesh(canGeo, canMat);
-    can.position.set(i * 3, 0.4, (Math.random() - 0.5) * 4);
+  // Пивные банки
+  for (let i = -5; i <= 5; i += 2.5) {
+    const can = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.25, 0.25, 0.7, 16),
+      new THREE.MeshStandardMaterial({ color: 0x0055d4, metalness: 0.7 })
+    );
+    can.position.set(i * 3, 0.35, (Math.random() - 0.5) * 6);
     can.castShadow = true;
     scene.add(can);
     snacks.push(can);
   }
 
   // Злые бабки с тележками
-  for (let i = -1; i <= 2; i++) {
+  for (let i = 0; i < 4; i++) {
     const gGroup = new THREE.Group();
-    const gBody = new THREE.Mesh(
-      new THREE.BoxGeometry(1.1, 1.9, 0.7),
-      new THREE.MeshStandardMaterial({ color: 0x6d4c41 })
-    );
-    gBody.position.y = 0.95;
+    const gBody = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 1.4, 16), new THREE.MeshStandardMaterial({ color: 0x6d4c41 }));
+    gBody.position.y = 0.7;
     gBody.castShadow = true;
     gGroup.add(gBody);
 
-    const gHead = new THREE.Mesh(
-      new THREE.SphereGeometry(0.45, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0xd32f2f }) // Красный платочек
-    );
-    gHead.position.set(0, 2.1, 0);
+    const gHead = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshStandardMaterial({ color: 0xd32f2f }));
+    gHead.position.set(0, 1.5, 0);
     gGroup.add(gHead);
 
-    gGroup.position.set(i * 8 + 5, 0, (Math.random() - 0.5) * 3);
+    gGroup.position.set(i * 10 - 2, 0, (Math.random() - 0.5) * 5);
     scene.add(gGroup);
-    grannies.push({ mesh: gGroup, alive: true, speed: 0.035 * (i % 2 === 0 ? 1 : -1) });
+    grannies.push({ mesh: gGroup, alive: true, speed: 0.03 * (i % 2 === 0 ? 1 : -1) });
   }
 }
 
 function spawnHollywoodExplosion(pos) {
-  const count = 45;
-  const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+  const count = 40;
+  const geo = new THREE.BoxGeometry(0.25, 0.25, 0.25);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xff4500 });
 
   for (let i = 0; i < count; i++) {
     const p = new THREE.Mesh(geo, mat);
@@ -237,16 +223,15 @@ function spawnHollywoodExplosion(pos) {
       vx: (Math.random() - 0.5) * 0.4,
       vy: Math.random() * 0.4 + 0.1,
       vz: (Math.random() - 0.5) * 0.4,
-      life: 50
+      life: 45
     });
   }
 }
 
 function triggerFart() {
   spawnHollywoodExplosion(wolf.position);
-  // Проверяем бабок поблизости для уничтожения
   grannies.forEach(g => {
-    if (g.alive && g.mesh.position.distanceTo(wolf.position) < 5.5) {
+    if (g.alive && g.mesh.position.distanceTo(wolf.position) < 5) {
       g.alive = false;
       scene.remove(g.mesh);
       spawnHollywoodExplosion(g.mesh.position);
@@ -259,34 +244,39 @@ function triggerFart() {
 function initControls() {
   const bind = (id, start, end) => {
     const el = document.getElementById(id);
+    if(!el) return;
     el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
     el.addEventListener('touchend', (e) => { e.preventDefault(); end(); });
     el.addEventListener('mousedown', () => start());
     el.addEventListener('mouseup', () => end());
   };
 
+  bind('upBtn', () => moveUp = true, () => moveUp = false);
+  bind('downBtn', () => moveDown = true, () => moveDown = false);
   bind('leftBtn', () => moveLeft = true, () => moveLeft = false);
   bind('rightBtn', () => moveRight = true, () => moveRight = false);
+
   bind('jumpBtn', () => {
-    if (!isJumping) {
-      wolfVy = 0.38;
-      isJumping = true;
-    }
+    if (!isJumping) { wolfVy = 0.35; isJumping = true; }
   }, () => {});
-  
+
   document.getElementById('fartBtn').addEventListener('touchstart', (e) => { e.preventDefault(); triggerFart(); });
   document.getElementById('fartBtn').addEventListener('mousedown', () => triggerFart());
 }
 
 function update() {
-  const speed = 0.14;
+  const speed = 0.13;
+  // Свободное перемещение по всем 4 направлениям
   if (moveLeft) wolf.position.x -= speed;
   if (moveRight) wolf.position.x += speed;
+  if (moveUp) wolf.position.z -= speed;
+  if (moveDown) wolf.position.z += speed;
 
-  // Ограничение по границам улицы
-  wolf.position.x = Math.max(-45, Math.min(45, wolf.position.x));
+  // Ограничение в пределах дороги и тротуаров
+  wolf.position.x = Math.max(-50, Math.min(50, wolf.position.x));
+  wolf.position.z = Math.max(-7.5, Math.min(7.5, wolf.position.z));
 
-  // Гравитация и прыжок
+  // Прыжок и гравитация
   wolfVy -= gravity;
   wolf.position.y += wolfVy;
   if (wolf.position.y < 0) {
@@ -295,10 +285,11 @@ function update() {
     isJumping = false;
   }
 
-  // Камера динамически следует за Волком как в кино
+  // Динамическая кинематографическая камера следом за волком
   camera.position.x = wolf.position.x;
-  camera.position.y = wolf.position.y + 3.5;
-  camera.lookAt(wolf.position.x + 2, wolf.position.y + 1.5, 0);
+  camera.position.z = wolf.position.z + 9;
+  camera.position.y = wolf.position.y + 4.5;
+  camera.lookAt(wolf.position.x, wolf.position.y + 1, wolf.position.z);
 
   // Движение бабок
   grannies.forEach(g => {
@@ -312,7 +303,7 @@ function update() {
 
   // Сбор пивных банок
   snacks.forEach((s, idx) => {
-    if (s && s.position.distanceTo(wolf.position) < 1.4) {
+    if (s && s.position.distanceTo(wolf.position) < 1.3) {
       scene.remove(s);
       snacks.splice(idx, 1);
       score += 50;
@@ -328,26 +319,4 @@ function update() {
     p.vy -= 0.012;
     p.life--;
     if (p.life <= 0) {
-      scene.remove(p.mesh);
-      particles.splice(idx, 1);
-    }
-  });
-}
-
-function animate() {
-  requestAnimationFrame(animate);
-  update();
-  renderer.render(scene, camera);
-}
-
-function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-init3D();
-animate();
-</script>
-</body>
-</html>
+      scene.
